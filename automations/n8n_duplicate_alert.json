@@ -1,0 +1,118 @@
+{
+  "name": "ConsultBae Duplicate Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "consultbae-duplicate-check",
+        "responseMode": "lastNode"
+      },
+      "id": "WebhookTrigger",
+      "name": "Incoming CSV Row",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/check-duplicate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || $json) }}"
+      },
+      "id": "CheckDuplicate",
+      "name": "Check App Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.duplicate }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "IsDuplicate",
+      "name": "Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { alert: 'duplicate_found', result: $json } }}"
+      },
+      "id": "DuplicateResponse",
+      "name": "Duplicate Alert Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1040, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { alert: 'no_duplicate', result: $json } }}"
+      },
+      "id": "NoDuplicateResponse",
+      "name": "No Duplicate Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1040, 400]
+    }
+  ],
+  "connections": {
+    "Incoming CSV Row": {
+      "main": [
+        [
+          {
+            "node": "Check App Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check App Database": {
+      "main": [
+        [
+          {
+            "node": "Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Alert Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Duplicate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "consultbae-local-demo"
+}

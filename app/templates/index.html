@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ConsultBae Audio Collection</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <div class="heading">
+        <h1>Audio Collection</h1>
+        <p>Worker details, audio capture, metadata extraction, and playback in one place.</p>
+      </div>
+      <form action="/submit" method="post" enctype="multipart/form-data">
+        <label>
+          Name
+          <input name="name" required autocomplete="name">
+        </label>
+        <label>
+          Phone
+          <input name="phone" required autocomplete="tel">
+        </label>
+        <label>
+          City
+          <input name="city" autocomplete="address-level2">
+        </label>
+        <label>
+          Audio file
+          <input id="audio-file" name="audio" type="file" accept="audio/wav,audio/*" required>
+        </label>
+        <div class="recorder">
+          <button type="button" id="record">Record</button>
+          <button type="button" id="stop" disabled>Stop</button>
+          <span id="recording-status">Ready</span>
+        </div>
+        <audio id="preview" controls></audio>
+        <button type="submit">Submit Audio</button>
+      </form>
+      <p class="message">{{ message }}</p>
+    </section>
+
+    <section class="submissions">
+      <h2>Submissions</h2>
+      {{ submissions }}
+    </section>
+  </main>
+  <script src="/static/recorder.js"></script>
+</body>
+</html>

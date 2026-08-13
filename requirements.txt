@@ -1,0 +1,2 @@
+# This project intentionally uses the Python standard library only.
+# Optional: install ffmpeg separately if you want metadata extraction for MP3/WebM uploads.

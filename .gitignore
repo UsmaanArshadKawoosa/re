@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+database.sqlite
+storage/audio/*
+!storage/audio/.gitkeep
+work/
