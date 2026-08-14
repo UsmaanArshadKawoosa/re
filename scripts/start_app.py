@@ -27,22 +27,38 @@ if __name__ == "__main__":
     print("===================================", flush=True)
 
     if USE_POSTGRES:
-        print("PostgreSQL configured — initializing schema and checking data...")
-        # Use the shared connect/init_db abstraction. connect() ignores the path
-        # when DATABASE_URL is set.
-        with connect(DB_PATH) as conn:
-            init_db(conn)
-            try:
-                row = conn.execute("SELECT COUNT(*) AS c FROM people").fetchone()
-                count = int(row["c"]) if row and ("c" in row or 0) else (int(row[0]) if row else 0)
-            except Exception:
-                # If the table doesn't exist or query fails, treat as empty.
-                count = 0
+        print("PG BRANCH ENTERED", flush=True)
+        print("PostgreSQL configured — initializing schema and checking data...", flush=True)
+        print("ABOUT TO CONNECT TO POSTGRES", flush=True)
+        try:
+            # Use the shared connect/init_db abstraction. connect() ignores the path
+            # when DATABASE_URL is set.
+            with connect(DB_PATH) as conn:
+                print("POSTGRES CONNECTION SUCCESS", flush=True)
+                print("ABOUT TO INITIALIZE POSTGRES SCHEMA", flush=True)
+                init_db(conn)
+                print("POSTGRES SCHEMA INITIALIZED", flush=True)
+                try:
+                    print("ABOUT TO COUNT PEOPLE", flush=True)
+                    row = conn.execute("SELECT COUNT(*) AS c FROM people").fetchone()
+                    print("PEOPLE COUNT QUERY SUCCEEDED", flush=True)
+                    count = int(row["c"]) if row and ("c" in row or 0) else (int(row[0]) if row else 0)
+                except Exception:
+                    # If the table doesn't exist or query fails, treat as empty.
+                    count = 0
+        except Exception:
+            import traceback
+
+            print("EXCEPTION DURING POSTGRES STARTUP:", flush=True)
+            traceback.print_exc()
+            print("POSTGRES STARTUP EXCEPTION HANDLED — proceeding with fallback", flush=True)
+            # Treat as no postgres setup so ingestion will run locally if appropriate
+            count = 0
         if count == 0:
-            print("No application data found in PostgreSQL — running initial ingestion...")
+            print("No application data found in PostgreSQL — running initial ingestion...", flush=True)
             ingest.main()
         else:
-            print(f"PostgreSQL already contains data ({count} people). Skipping ingestion.")
+            print(f"PostgreSQL already contains data ({count} people). Skipping ingestion.", flush=True)
     else:
         # SQLite path: preserve existing behavior
         if not DB_PATH.exists():
