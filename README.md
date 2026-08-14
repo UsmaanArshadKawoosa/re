@@ -412,28 +412,6 @@ Here is the architectural upgrade roadmap to handle this scale effortlessly:
 
 ---
 
-## Video Walkthrough & Demo Checklist
 
-When recording the submission walkthrough video, follow this sequence:
-
-1. **Terminal Ingestion Demo:**
-   * Run `python scripts/ingest.py` $\rightarrow$ Highlight the 105 raw rows processed, 103 usable rows imported, 60 canonical people created, and 3 logged issues.
-   * Run `python scripts/smoke_test.py` $\rightarrow$ Show all automated assertions passing.
-2. **Database & Data Quality Issues:**
-   * Open `database.sqlite` and show `data_quality_issues` (highlighting the repaired shifted row and skipped header).
-   * Show `match_candidates` (highlighting soft matches flagged for review).
-3. **n8n Automation Workflow:**
-   * Open `automations/n8n_duplicate_alert.json` in n8n $\rightarrow$ Explain the webhook trigger, the HTTP check, and the conditional duplicate alert branching.
-4. **Duplicate API Live Call:**
-   * Run `python scripts/test_app_api.py` or trigger a `curl` request showing real-time duplicate detection.
-5. **Audio Web App Live Demonstration:**
-   * Start `python app/main.py` and open `http://127.0.0.1:8000`.
-   * Click **Start Recording**, speak into the microphone to show the live canvas waveform and timer.
-   * Click **Stop Recording**, preview the audio, and hit **Save Submission**.
-   * Show the updated submissions table with instant playback and extracted metrics (duration, sample rate, bitrate, loudness, quality rating).
-6. **Architecture & Scaling Summary:**
-   * Conclude by summarizing the weekend scale-out plan (S3 presigned URLs, Celery queue, and Postgres).
-
----
 
 *Thank you for reviewing my assignment!*
