@@ -5,7 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "consultbae-duplicate-check",
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       },
       "id": "WebhookTrigger",
       "name": "Incoming CSV Row",
@@ -16,7 +16,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:8000/api/check-duplicate",
+        "url": "https://consultbae-cdit.onrender.com/api/check-duplicate",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.body || $json) }}"
@@ -114,5 +114,5 @@
     "executionOrder": "v1"
   },
   "active": false,
-  "versionId": "consultbae-local-demo"
+  "versionId": "consultbae-cloud-demo"
 }
