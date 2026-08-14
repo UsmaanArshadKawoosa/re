@@ -21,7 +21,7 @@ from match_people import create_or_get_person, find_existing_person, update_pers
 from normalize import name_key, normalize_city, normalize_email, normalize_name, normalize_phone
 
 
-HOST = "127.0.0.1"
+HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8000"))
 AUDIO_DIR = ROOT / "storage" / "audio"
 TEMPLATE_DIR = ROOT / "app" / "templates"

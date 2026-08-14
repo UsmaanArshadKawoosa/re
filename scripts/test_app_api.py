@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -18,6 +19,7 @@ def main() -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env={**os.environ, "PORT": "8010"},
     )
     try:
         time.sleep(2)
@@ -30,7 +32,7 @@ def main() -> None:
             }
         ).encode("utf-8")
         request = urllib.request.Request(
-            "http://127.0.0.1:8000/api/check-duplicate",
+            "http://127.0.0.1:8010/api/check-duplicate",
             data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",
