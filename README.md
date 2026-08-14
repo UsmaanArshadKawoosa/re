@@ -18,7 +18,7 @@ This repository contains my end-to-end implementation for the **ConsultBae AI Au
 8. [Audio Collection Web App & Metadata Extraction](#audio-collection-web-app--metadata-extraction)
 9. [Stuck Log: Technical Challenges & Decisions](#stuck-log-technical-challenges--decisions)
 10. [Scale Plan: 5,000 Workers in One Weekend](#scale-plan-5000-workers-in-one-weekend)
-11. [Video Walkthrough & Demo Checklist](#video-walkthrough--demo-checklist)
+
 
 ---
 
