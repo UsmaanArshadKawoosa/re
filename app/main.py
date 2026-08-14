@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from audio_metadata import extract_audio_metadata
-from database import DB_PATH, connect, init_db
+from database import DB_PATH, connect, init_db, USE_POSTGRES
 from match_people import create_or_get_person, find_existing_person, update_person_basics
 from normalize import name_key, normalize_city, normalize_email, normalize_name, normalize_phone
 
@@ -194,7 +194,12 @@ def submissions_table() -> str:
         "<tbody>",
     ]
     for row in rows:
-        path = "/" + Path(row["audio_path"]).as_posix()
+        # For Postgres, serve audio via the persistent /api/audio/<id> endpoint.
+        # For SQLite, continue to serve from the filesystem storage path.
+        if USE_POSTGRES:
+            path = f"/api/audio/{row['id']}"
+        else:
+            path = "/" + Path(row["audio_path"]).as_posix()
         quality = row["quality_estimate"] or "unknown"
         if "good" in quality.lower():
             badge_class = "badge badge-good"
@@ -259,6 +264,26 @@ class AppHandler(BaseHTTPRequestHandler):
             if target.exists() and target.is_file():
                 self.send_bytes(target.read_bytes(), mimetypes.guess_type(target)[0] or "application/octet-stream")
                 return
+        if parsed.path.startswith("/api/audio/"):
+            # Serve audio stored in the database by submission id
+            try:
+                sid = int(parsed.path.split("/api/audio/", 1)[1].split("/", 1)[0])
+            except Exception:
+                self.send_bytes(b"Not found", "text/plain", 404)
+                return
+            with connect(DB_PATH) as conn:
+                init_db(conn)
+                row = conn.execute("SELECT audio_data, content_type FROM audio_submissions WHERE id = ?", (sid,)).fetchone()
+            if not row:
+                self.send_bytes(b"Not found", "text/plain", 404)
+                return
+            audio_blob = row["audio_data"] if "audio_data" in row else row[0]
+            content_type = row.get("content_type") if isinstance(row, dict) else (row[1] if len(row) > 1 else None)
+            if not audio_blob:
+                self.send_bytes(b"Not found", "text/plain", 404)
+                return
+            self.send_bytes(audio_blob, content_type or "application/octet-stream")
+            return
         if parsed.path.startswith("/storage/audio/"):
             target = ROOT / parsed.path.lstrip("/")
             if target.exists() and target.is_file():
@@ -313,24 +338,53 @@ class AppHandler(BaseHTTPRequestHandler):
             init_db(conn)
             person_id = create_or_get_person(conn, name=name, email=None, phone=phone, city=city)
             update_person_basics(conn, person_id=person_id, name=name, email=None, phone=phone, city=city)
-            conn.execute(
-                """
-                INSERT INTO audio_submissions
-                (person_id, submitter_name, phone, audio_path, duration_seconds, sample_rate_khz, bitrate_kbps, loudness_db, quality_estimate)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    person_id,
-                    name,
-                    normalize_phone(phone),
-                    relative_audio_path,
-                    metadata["duration_seconds"],
-                    metadata["sample_rate_khz"],
-                    metadata["bitrate_kbps"],
-                    metadata["loudness_db"],
-                    metadata["quality_estimate"],
-                ),
-            )
+
+            # Read raw bytes for storage in Postgres when configured
+            audio_bytes = audio_file["data"]
+            content_type = audio_file.get("content_type") or "application/octet-stream"
+
+            if USE_POSTGRES:
+                # For Postgres, store audio bytes in audio_data column and content_type
+                conn.execute(
+                    """
+                    INSERT INTO audio_submissions
+                    (person_id, submitter_name, phone, audio_path, audio_data, content_type, duration_seconds, sample_rate_khz, bitrate_kbps, loudness_db, quality_estimate)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        person_id,
+                        name,
+                        normalize_phone(phone),
+                        relative_audio_path,
+                        audio_bytes,
+                        content_type,
+                        metadata["duration_seconds"],
+                        metadata["sample_rate_khz"],
+                        metadata["bitrate_kbps"],
+                        metadata["loudness_db"],
+                        metadata["quality_estimate"],
+                    ),
+                )
+            else:
+                # SQLite / filesystem behavior unchanged
+                conn.execute(
+                    """
+                    INSERT INTO audio_submissions
+                    (person_id, submitter_name, phone, audio_path, duration_seconds, sample_rate_khz, bitrate_kbps, loudness_db, quality_estimate)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        person_id,
+                        name,
+                        normalize_phone(phone),
+                        relative_audio_path,
+                        metadata["duration_seconds"],
+                        metadata["sample_rate_khz"],
+                        metadata["bitrate_kbps"],
+                        metadata["loudness_db"],
+                        metadata["quality_estimate"],
+                    ),
+                )
             conn.commit()
 
         body = render_template(

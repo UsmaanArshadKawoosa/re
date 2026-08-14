@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from database import DB_PATH, connect, init_db
+from database import DB_PATH, USE_POSTGRES, connect, init_db
 from match_people import create_or_get_person, update_person_basics
 from normalize import (
     name_key,
@@ -234,7 +234,7 @@ def record_match_candidates(conn) -> int:
                 and left["normalized_name"] == right["normalized_name"]
                 and left["normalized_city"] == right["normalized_city"]
             ):
-                conn.execute(
+                cursor = conn.execute(
                     """
                     INSERT OR IGNORE INTO match_candidates
                     (left_person_id, right_person_id, reason, confidence)
@@ -242,7 +242,11 @@ def record_match_candidates(conn) -> int:
                     """,
                     (left["id"], right["id"], "same normalized name and city but no shared email/phone", "review"),
                 )
-                inserted += conn.total_changes
+                # Count successfully inserted rows
+                try:
+                    inserted += cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 1
+                except (AttributeError, TypeError):
+                    inserted += 1
     return inserted
 
 
@@ -258,6 +262,7 @@ def main() -> None:
     init_db(conn)
     for table in (
         "match_candidates",
+        "audio_submissions",
         "data_quality_issues",
         "source_records",
         "person_skills",
@@ -266,7 +271,8 @@ def main() -> None:
         "people",
     ):
         conn.execute(f"DELETE FROM {table}")
-    conn.execute("DELETE FROM sqlite_sequence")
+    if not USE_POSTGRES:
+        conn.execute("DELETE FROM sqlite_sequence")
     totals = {}
     for source, path in SOURCES.items():
         totals[source] = import_source(conn, source, path, batch_id)
@@ -281,7 +287,7 @@ def main() -> None:
     print(f"Canonical people: {people_count}")
     print(f"Data quality issues logged: {issue_count}")
     print(f"Review match candidates: {candidate_count}")
-    print(f"Database: {DB_PATH}")
+    print(f"Database: {'PostgreSQL' if USE_POSTGRES else DB_PATH}")
 
 
 if __name__ == "__main__":
