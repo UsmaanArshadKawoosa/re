@@ -247,7 +247,7 @@ class AppHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path in {"/", "/submissions"}:
+        if parsed.path in {"/", "/submissions", "/submit"}:
             body = render_template("index.html", submissions=submissions_table(), message="", alert_class="")
             self.send_bytes(body)
             return

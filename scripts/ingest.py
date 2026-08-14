@@ -257,7 +257,6 @@ def main() -> None:
     conn = connect(DB_PATH)
     init_db(conn)
     for table in (
-        "audio_submissions",
         "match_candidates",
         "data_quality_issues",
         "source_records",
