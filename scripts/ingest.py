@@ -101,8 +101,50 @@ def normalized_record(source: str, row: dict[str, str], row_number: int, conn) -
         status = normalize_status(row.get("status"))
         skills = split_skills(row.get("skill_tags"))
 
+        # Detect shifted row pattern (skills in email column, email with '@' in name column, etc.)
+        if email and "@" not in email and "@" in row.get("worker_name", ""):
+            repaired_email = row.get("worker_name", "").strip()
+            repaired_name = row.get("rate", "").strip()
+            repaired_rate_str = row.get("location", "").strip()
+            repaired_city = row.get("status", "").strip()
+            repaired_status_str = row.get("skill_tags", "").strip()
+            repaired_skills_str = row.get("email_id", "").strip()
+
+            rate, unit = parse_rate(repaired_rate_str)
+            status = normalize_status(repaired_status_str)
+
+            if "@" in repaired_email and rate is not None and repaired_name:
+                repaired_dict = {
+                    "email_id": repaired_email,
+                    "worker_name": repaired_name,
+                    "rate": repaired_rate_str,
+                    "location": repaired_city,
+                    "status": repaired_status_str,
+                    "skill_tags": repaired_skills_str,
+                }
+                log_issue(
+                    conn,
+                    source,
+                    row_number,
+                    "repaired_shifted_row",
+                    json.dumps(row),
+                    json.dumps(repaired_dict),
+                    "realigned shifted columns and imported",
+                )
+                return {
+                    "name": normalize_name(repaired_name),
+                    "email": repaired_email,
+                    "phone": "",
+                    "city": repaired_city,
+                    "skills": split_skills(repaired_skills_str),
+                    "extra": {"rate_amount": rate, "rate_unit": unit, "status": status},
+                }
+            else:
+                log_issue(conn, source, row_number, "malformed_shifted_row", json.dumps(row), None, "skipped unrepairable shifted row")
+                return None
+
         if email and "@" not in email:
-            log_issue(conn, source, row_number, "malformed_shifted_row", json.dumps(row), None, "skipped unsafe shifted row")
+            log_issue(conn, source, row_number, "malformed_row", json.dumps(row), None, "skipped malformed row without valid email")
             return None
         if row.get("rate") and rate is None:
             log_issue(conn, source, row_number, "unparsed_rate", row.get("rate"), None, "kept raw value in source_records")

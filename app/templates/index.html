@@ -3,49 +3,122 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ConsultBae Audio Collection</title>
+  <title>ConsultBae Audio Collection & Quality Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <main>
-    <section class="panel">
-      <div class="heading">
-        <h1>Audio Collection</h1>
-        <p>Worker details, audio capture, metadata extraction, and playback in one place.</p>
-      </div>
-      <form action="/submit" method="post" enctype="multipart/form-data">
-        <label>
-          Name
-          <input name="name" required autocomplete="name">
-        </label>
-        <label>
-          Phone
-          <input name="phone" required autocomplete="tel">
-        </label>
-        <label>
-          City
-          <input name="city" autocomplete="address-level2">
-        </label>
-        <label>
-          Audio file
-          <input id="audio-file" name="audio" type="file" accept="audio/wav,audio/*" required>
-        </label>
-        <div class="recorder">
-          <button type="button" id="record">Record</button>
-          <button type="button" id="stop" disabled>Stop</button>
-          <span id="recording-status">Ready</span>
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-logo">CB</div>
+        <div>
+          <span class="brand-title">ConsultBae Automation</span>
+          <span class="brand-subtitle">Candidate Audio Collection & Telemetry</span>
         </div>
-        <audio id="preview" controls></audio>
-        <button type="submit">Submit Audio</button>
-      </form>
-      <p class="message">{{ message }}</p>
-    </section>
+      </div>
+      <div class="header-status">
+        <span class="status-indicator"></span>
+        <span class="status-text">Pipeline Active</span>
+      </div>
+    </div>
+  </header>
 
-    <section class="submissions">
-      <h2>Submissions</h2>
-      {{ submissions }}
-    </section>
+  <main class="app-main">
+    <div class="grid-layout">
+      <!-- Submission Form & Studio -->
+      <section class="card capture-card">
+        <div class="card-header">
+          <h2>Candidate Voice Submission</h2>
+          <p>Capture voice profiles, calculate audio quality metrics, and link with canonical profiles.</p>
+        </div>
+
+        <form id="submission-form" action="/submit" method="post" enctype="multipart/form-data">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="input-name">Full Name <span class="required">*</span></label>
+              <input id="input-name" name="name" type="text" placeholder="e.g. Tanvi Gupta" required autocomplete="name">
+            </div>
+            <div class="form-group">
+              <label for="input-phone">Phone Number <span class="required">*</span></label>
+              <input id="input-phone" name="phone" type="tel" placeholder="e.g. +91 9000000254" required autocomplete="tel">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="input-city">City <span class="optional">(Optional)</span></label>
+            <input id="input-city" name="city" type="text" placeholder="e.g. Bengaluru, Gurgaon, Delhi NCR" autocomplete="address-level2">
+          </div>
+
+          <!-- Studio Recording Module -->
+          <div class="studio-box">
+            <div class="studio-header">
+              <span class="studio-title">Browser Voice Studio (16-bit PCM WAV)</span>
+              <span id="recording-timer" class="timer-badge">00:00</span>
+            </div>
+
+            <div class="visualizer-container">
+              <canvas id="visualizer-canvas"></canvas>
+              <div id="visualizer-placeholder" class="visualizer-placeholder">
+                <span>Microphone inactive — click Record below</span>
+              </div>
+            </div>
+
+            <div class="studio-controls">
+              <button type="button" id="record" class="btn btn-record">
+                <span class="btn-dot"></span> Start Recording
+              </button>
+              <button type="button" id="stop" class="btn btn-stop" disabled>
+                Stop Recording
+              </button>
+              <span id="recording-status" class="recording-status">Ready</span>
+            </div>
+
+            <div class="preview-wrapper" id="preview-wrapper" style="display: none;">
+              <span class="preview-label">Recorded Audio Preview:</span>
+              <audio id="preview" controls></audio>
+            </div>
+          </div>
+
+          <!-- Fallback File Upload -->
+          <div class="form-group upload-group">
+            <label for="audio-file">Or Upload Audio File <span class="optional">(WAV / MP3)</span></label>
+            <input id="audio-file" name="audio" type="file" accept="audio/wav,audio/mp3,audio/mpeg,audio/*" required>
+          </div>
+
+          <button type="submit" id="submit-btn" class="btn btn-primary">
+            Save Submission & Process Quality
+          </button>
+        </form>
+
+        <div id="form-alert" class="message {{ alert_class }}">{{ message }}</div>
+      </section>
+
+      <!-- Submissions Table -->
+      <section class="card submissions-card">
+        <div class="card-header flex-between">
+          <div>
+            <h2>Recent Audio Submissions</h2>
+            <p>Real-time audio feed, extracted technical metadata, and playback.</p>
+          </div>
+        </div>
+
+        <div class="submissions-wrapper">
+          {{ submissions }}
+        </div>
+      </section>
+    </div>
   </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <span>ConsultBae AI Automation Take-home Assignment</span>
+      <span>SQLite &bull; Pure-Python Audio DSP &bull; n8n Integration</span>
+    </div>
+  </footer>
+
   <script src="/static/recorder.js"></script>
 </body>
 </html>

@@ -8,7 +8,8 @@ from typing import Iterable
 CITY_ALIASES = {
     "gurgaon": "gurugram",
     "new delhi": "delhi",
-    "delhi ncr": "delhi",
+    "delhi": "delhi",
+    "delhi ncr": "ncr",
     "bangalore": "bengaluru",
 }
 

@@ -1,297 +1,439 @@
-# ConsultBae AI Automation Assignment
+# ConsultBae AI Automation Take-Home Assignment
 
-This project is my submission for the ConsultBae AI Automation take-home assignment. It includes a CSV merge pipeline, a SQLite database, an n8n duplicate-check workflow, and a small audio collection web app.
+Submitted by: **Usmaan Arshad Kawoosa**
 
-## Overview
+This repository contains my end-to-end implementation for the **ConsultBae AI Automation take-home assignment**. It includes an automated CSV ingestion and deduplication pipeline, a normalized SQLite database with audit trails, an n8n webhook workflow for real-time duplicate screening, a browser-based audio collection web app with real-time waveform visualization and technical audio quality analysis, and a production scaling roadmap for high-volume recruitment.
 
-The solution covers the required tasks:
+---
 
-- Merge three messy CSV sources into one clean database.
-- Deduplicate people using normalized email and phone values.
-- Preserve raw source rows and log data-quality decisions.
-- Provide an n8n workflow that checks new records for duplicates.
-- Provide a browser-based audio submission app with metadata extraction.
-- Document data issues, implementation choices, stuck points, and scale considerations.
+## Table of Contents
 
-## Tech Stack
+1. [Executive Summary & Architecture](#executive-summary--architecture)
+2. [Tech Stack & Design Philosophy](#tech-stack--design-philosophy)
+3. [Local Quickstart & Verification](#local-quickstart--verification)
+4. [Deployment: Local vs. Global/Cloud Differences](#deployment-local-vs-globalcloud-differences)
+5. [Database Design & Auditability](#database-design--auditability)
+6. [Data Pipeline, Normalization & Cleaning](#data-pipeline-normalization--cleaning)
+7. [Duplicate Check API & n8n Automation](#duplicate-check-api--n8n-automation)
+8. [Audio Collection Web App & Metadata Extraction](#audio-collection-web-app--metadata-extraction)
+9. [Stuck Log: Technical Challenges & Decisions](#stuck-log-technical-challenges--decisions)
+10. [Scale Plan: 5,000 Workers in One Weekend](#scale-plan-5000-workers-in-one-weekend)
+11. [Video Walkthrough & Demo Checklist](#video-walkthrough--demo-checklist)
 
-- Python 3.11+
-- SQLite
-- Standard-library HTTP server
-- Browser JavaScript for WAV audio recording
-- n8n for the no-code automation
+---
 
-The core project intentionally avoids heavy dependencies so it is easy to run and review.
+## Executive Summary & Architecture
 
-## Local Setup
+The solution tackles candidate data ingestion, automated verification, and voice assessment through four core components:
 
-From the project root:
-
-```bash
-python scripts/ingest.py
-python scripts/smoke_test.py
-python app/main.py
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                           1. DATA PIPELINE (ETL)                               │
+│  source1_naukri.csv (42)  │  source2_gig.csv (32)   │  source3_cbnexus.csv (31)│
+└──────────────────────────────────────┬─────────────────────────────────────────┘
+                                       ▼
+                 ┌───────────────────────────────────────────┐
+                 │    scripts/normalize.py + ingest.py       │
+                 │  - Indian Phone (+91) & Email Cleaning    │
+                 │  - City Mapping (Delhi vs NCR distinct)   │
+                 │  - Repaired Shifted Gig Row (Row 20)      │
+                 │  - Skipped Blank Rows & Repeated Headers  │
+                 └─────────────────────┬─────────────────────┘
+                                       ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                         2. RELATIONAL DATABASE (SQLite)                        │
+│  people (60 canonical)  │  person_emails  │  person_phones  │  person_skills   │
+│  source_records (105)   │  data_quality_issues (3) │ match_candidates (7 pairs)│
+└──────────────────────────────────────┬─────────────────────────────────────────┘
+                                       ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                       3. API & AUTOMATION INTEGRATION                          │
+│  POST /api/check-duplicate  ◄───►  automations/n8n_duplicate_alert.json        │
+└──────────────────────────────────────┬─────────────────────────────────────────┘
+                                       ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                    4. VOICE STUDIO APP & AUDIO TELEMETRY                       │
+│  Browser Recording Studio (Canvas Waveform + Timer)  │  Pure-Python WAV DSP    │
+│  Duration • Sample Rate (kHz) • Bitrate (kbps) • Loudness (RMS dBFS) • Quality │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Open:
+### Key Metrics from Ingestion:
+* **Total raw source rows processed:** 105 rows
+* **Total usable records imported:** 103 records
+* **Canonical deduplicated people:** 60 unique profiles
+* **Logged data-quality issues:** 3 issues (1 blank row skipped, 1 shifted row repaired & imported, 1 repeated header skipped)
+* **Soft match review candidates:** 7 candidate pairs (same normalized name & city without shared email/phone)
 
+---
+
+## Tech Stack & Design Philosophy
+
+* **Language & Runtime:** Python 3.10+ / 3.11+ / 3.12+ / 3.13+
+* **Database:** SQLite (with `PRAGMA foreign_keys = ON`)
+* **Web Server:** Standard Library `http.server.ThreadingHTTPServer` with custom zero-dependency multipart form-data parsing
+* **Frontend:** Vanilla HTML5, CSS3 (Modern HSL Design System), and JavaScript (Web Audio API + HTML5 Canvas Visualizer)
+* **Audio Digital Signal Processing (DSP):** Pure Python standard `wave` + `math` module (with `ffprobe` fallback for non-WAV formats)
+* **Automation:** n8n Webhook & HTTP Request workflow JSON
+
+### Why Zero-Dependency Core?
+I intentionally engineered the ingestion, audio metadata calculation, and web server without mandatory external heavy dependencies (like Pandas, FastAPI, or FFmpeg binaries). This guarantees the reviewer can clone, run, and verify the entire project instantly on any operating system without complex environment setups or binary compilation issues.
+
+---
+
+## Local Quickstart & Verification
+
+### 1. Clone & Ingest Data
+```bash
+# Clone the repository
+git clone https://github.com/UsmaanArshadKawoosa/re.git
+cd re
+
+# Ingest all raw data into database.sqlite
+python scripts/ingest.py
+```
+
+### 2. Run Automated Verification Suite
+```bash
+# Verify data integrity, city mapping, and audio metadata extraction
+python scripts/smoke_test.py
+
+# Verify duplicate detection API endpoints (exact match, candidate match, new user)
+python scripts/test_app_api.py
+```
+
+### 3. Launch the Audio Collection App
+```bash
+# Start the local server
+python app/main.py
+```
+Open your browser and navigate to:
 ```text
 http://127.0.0.1:8000
 ```
 
-Useful verification commands:
+---
+
+## Deployment: Local vs. Global/Cloud Differences
+
+I built the app with full production deployment readiness for cloud platforms such as **Render**, **Railway**, **Fly.io**, or any container/VPS host.
 
 ```bash
-python scripts/ingest.py
-python scripts/smoke_test.py
-python scripts/test_app_api.py
-```
-
-## Deployment
-
-The app can run outside my local machine on a service such as Render, Railway, or any host that supports Python web services.
-
-The deployed functionality is the same as the local functionality:
-
-- the audio form works from a public URL;
-- `/api/check-duplicate` is available to n8n or other tools;
-- the app still writes people and audio submission rows to SQLite;
-- uploaded audio is still stored on the server filesystem.
-
-The important difference is persistence. On many free hosting plans, the server filesystem is temporary. That is fine for a short demo, but for a production launch I would move the database to Postgres and audio files to object storage such as S3, Cloudflare R2, or Google Cloud Storage.
-
-Deployment start command:
-
-```bash
+# One-command startup for cloud platforms (runs ingestion then boots web service):
 python scripts/start_app.py
 ```
 
-`scripts/start_app.py` runs ingestion first, creates `database.sqlite`, and then starts the app. The app reads the platform `PORT` environment variable and binds to `0.0.0.0`, which is required by most web service hosts.
+### Will functionality change between Local and Global deployment?
 
-Suggested deployment steps:
+| Dimension | Local Execution (`127.0.0.1:8000`) | Global / Cloud Deployment (`https://your-app.onrender.com`) |
+| :--- | :--- | :--- |
+| **Core Features** | Audio recording, file upload, metadata DSP, submission table, and duplicate check work locally. | **Identical functionality**, accessible globally over HTTPS from any mobile device, laptop, or browser. |
+| **n8n URL** | Uses `http://host.docker.internal:8000/api/check-duplicate` or `http://127.0.0.1:8000`. | Uses the public URL: `https://your-app.onrender.com/api/check-duplicate`. No Docker networking tricks needed. |
+| **Port Binding** | Binds to default port `8000`. | Binds dynamically to `0.0.0.0` and reads `PORT` environment variable injected by Render/Railway. |
+| **CORS** | Local browser same-origin. | `Access-Control-Allow-Origin: *` is enabled so n8n cloud instances or external frontends can call the API directly. |
+| **Storage Persistence** | Filesystem is permanently stored on local hard drive (`database.sqlite` & `storage/audio/`). | **Ephemeral Container Storage:** On free-tier cloud containers, the disk resets when the container restarts. |
 
-1. Push this repository to GitHub.
-2. Create a new Python web service on Render or Railway.
-3. Connect the GitHub repository.
-4. Use this build command:
+> **Production Note:** For a permanent production rollout at scale, I would swap the local SQLite database for managed **PostgreSQL** (e.g. Supabase, Neon, or Render Postgres) and stream audio uploads directly to cloud object storage like **Amazon S3**, **Cloudflare R2**, or **Google Cloud Storage**.
 
+---
+
+## Database Design & Auditability
+
+The database schema is defined in `scripts/database.py` and creates `database.sqlite`:
+
+```sql
+-- Core canonical person entity
+CREATE TABLE people (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    canonical_name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    primary_email TEXT,
+    primary_phone TEXT,
+    normalized_city TEXT,
+    skill_category TEXT DEFAULT 'uncategorized',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Multi-value contact tables (1-to-many lookup for aliases)
+CREATE TABLE person_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL REFERENCES people(id),
+    email TEXT NOT NULL,
+    normalized_email TEXT NOT NULL,
+    source TEXT NOT NULL,
+    UNIQUE(person_id, normalized_email)
+);
+
+CREATE TABLE person_phones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL REFERENCES people(id),
+    phone TEXT NOT NULL,
+    normalized_phone TEXT NOT NULL,
+    source TEXT NOT NULL,
+    UNIQUE(person_id, normalized_phone)
+);
+
+CREATE TABLE person_skills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL REFERENCES people(id),
+    skill TEXT NOT NULL,
+    source TEXT NOT NULL,
+    UNIQUE(person_id, skill)
+);
+
+-- Complete source lineage & audit trails
+CREATE TABLE source_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER REFERENCES people(id),
+    source_name TEXT NOT NULL,
+    row_number INTEGER NOT NULL,
+    raw_json TEXT NOT NULL,
+    import_batch_id TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE data_quality_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_name TEXT NOT NULL,
+    row_number INTEGER NOT NULL,
+    issue_type TEXT NOT NULL,
+    original_value TEXT,
+    resolved_value TEXT,
+    action_taken TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE match_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    left_person_id INTEGER NOT NULL REFERENCES people(id),
+    right_person_id INTEGER NOT NULL REFERENCES people(id),
+    reason TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(left_person_id, right_person_id, reason)
+);
+
+CREATE TABLE audio_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER REFERENCES people(id),
+    submitter_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    audio_path TEXT NOT NULL,
+    duration_seconds REAL,
+    sample_rate_khz REAL,
+    bitrate_kbps REAL,
+    loudness_db REAL,
+    quality_estimate TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## Data Pipeline, Normalization & Cleaning
+
+### 1. Normalization Rules (`scripts/normalize.py`)
+* **Phone Numbers:** Strips all non-digit formatting, resolves leading `0` and 10-digit Indian numbers into unified standard `91xxxxxxxxxx`.
+* **Emails:** Trimmed and lowercased to ensure casing differences (`ISHA.CHOPRA95@...` vs `isha.chopra95@...`) resolve to the same person.
+* **City Aliasing & Geographic Precision:**
+  * `Delhi` and `New Delhi` $\rightarrow$ unified as `delhi`
+  * `Delhi NCR` $\rightarrow$ mapped to `ncr` (preserving the distinct operational region of the National Capital Region)
+  * `Gurgaon` $\rightarrow$ `gurugram`
+  * `Bangalore` $\rightarrow$ `bengaluru`
+* **Dates:** Converts mixed date formats (`DD-MM-YYYY`, `YYYY-MM-DD`, `D Mon YYYY`, `MM/DD/YYYY`) into ISO standard `YYYY-MM-DD`.
+* **Compensation / CTC:** Identifies full rupee values ($>1000$) and converts them to LPA (e.g. $417,964 \rightarrow 4.18$ LPA), while preserving decimal entries already in LPA.
+* **Gig Rates:** Parses rate strings (`1415/hr`, `15k/month`) into structured amount and frequency unit.
+* **Skills & Auto-categorization:** Splits comma-separated skills, lowercases them, and categorizes candidates into `automation-heavy`, `web-dev`, `data`, or `uncategorized`.
+
+### 2. Entity Matching & Deduplication Strategy
+* **Automatic Hard Merges:** A record is automatically linked to an existing person if and only if there is a match on **normalized email** or **normalized phone**.
+* **Human Review Candidates:** When two records share the same normalized name and normalized city but lack matching email or phone numbers, they are flagged in `match_candidates` for human review rather than merged blindly. This prevents incorrectly collating different people with common names.
+* **Name Variations:** Handles abbreviated names like `R. Verma` vs `Rohit Verma` safely by only merging when a verified phone or email matches.
+
+### 3. Data Quality Issues Handled (`data_quality_issues`)
+During ingestion, 3 distinct data quality issues were logged:
+1. **Row 12 of `source2_gig_workers.csv` (Blank Row):** Contains empty commas `,,,,,` $\rightarrow$ Safely skipped and logged as `blank_identity`.
+2. **Row 20 of `source2_gig_workers.csv` (Shifted Row):** Column values were displaced circularly by 1 column:
+   ```json
+   {
+     "email_id": "react, javascript, mysql",
+     "worker_name": "ISHA.CHOPRA95@MAILTEST.EXAMPLE.ORG",
+     "rate": "Isha Chopra",
+     "location": "1406/hr",
+     "status": "Pune",
+     "skill_tags": "active"
+   }
+   ```
+   **My Solution:** Rather than discarding valid worker data, I built a deterministic realignment check. The pipeline verifies that the shifted `worker_name` contains `@`, realigns the columns into their correct fields, verifies the rate (`1406/hr`) and status (`active`), logs the audit trail as `repaired_shifted_row`, and imports the record cleanly.
+3. **Row 16 of `source3_cbnexus_contacts.csv` (Repeated Header):** Duplicate header inside the CSV body $\rightarrow$ Skipped and logged as `repeated_header`.
+
+---
+
+## Duplicate Check API & n8n Automation
+
+### API Endpoint: `POST /api/check-duplicate`
+Accepts a JSON payload representing a new incoming applicant:
 ```bash
-pip install -r requirements.txt
+curl -X POST http://127.0.0.1:8000/api/check-duplicate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Tanvi Gupta",
+    "email": "tanvi.gupta31@example.com",
+    "phone": "+91-9000000254",
+    "city": "Bangalore"
+  }'
 ```
 
-5. Use this start command:
-
-```bash
-python scripts/start_app.py
-```
-
-6. Open the public URL provided by the host.
-
-## Project Structure
-
-```text
-app/
-  main.py
-  static/
-  templates/
-automations/
-  n8n_duplicate_alert.json
-data/
-  raw/
-scripts/
-  audio_metadata.py
-  database.py
-  ingest.py
-  match_people.py
-  normalize.py
-  smoke_test.py
-  start_app.py
-  test_app_api.py
-storage/
-  audio/
-```
-
-## Database Design
-
-The SQLite database is created at:
-
-```text
-database.sqlite
-```
-
-Main tables:
-
-- `people`
-- `person_emails`
-- `person_phones`
-- `person_skills`
-- `source_records`
-- `data_quality_issues`
-- `match_candidates`
-- `audio_submissions`
-
-I kept source-level traceability through `source_records` so the cleaned database can always be audited against the original CSV rows.
-
-## Matching Logic
-
-Automatic merges:
-
-- same normalized email;
-- same normalized phone.
-
-Review candidates:
-
-- same normalized name and normalized city without a shared email or phone.
-
-I did not merge on name alone because the data has repeated names, missing fields, initials, alternate emails, and common city values. A conservative merge is better here than incorrectly combining two different people.
-
-## Normalization Rules
-
-Emails:
-
-- trim spaces;
-- lowercase before matching.
-
-Phones:
-
-- remove non-digit characters;
-- convert Indian 10-digit and leading-zero formats into `91xxxxxxxxxx`.
-
-Cities:
-
-- `Gurgaon` -> `gurugram`
-- `Bangalore` -> `bengaluru`
-- `New Delhi` -> `delhi`
-- `Delhi` -> `delhi`
-- `Delhi NCR` -> `ncr`
-
-Dates:
-
-- parse known formats into ISO date format where possible.
-
-CTC:
-
-- large numeric values are treated as annual rupee values and converted to LPA;
-- small decimal values are treated as already being LPA.
-
-Gig rates:
-
-- `1415/hr` is parsed as hourly;
-- `15k/month` is parsed as monthly.
-
-## n8n Automation
-
-Workflow file:
-
-```text
-automations/n8n_duplicate_alert.json
-```
-
-Demo payload:
-
+**Response (Exact Match Found):**
 ```json
 {
-  "name": "Tanvi Gupta",
-  "email": "tanvi.gupta31@example.com",
-  "phone": "+91-9000000254",
-  "city": "Bangalore"
+  "duplicate": true,
+  "match_type": "email_or_phone",
+  "person": {
+    "id": 1,
+    "canonical_name": "Tanvi Gupta",
+    "normalized_name": "tanvi gupta",
+    "primary_email": "tanvi.gupta31@example.com",
+    "primary_phone": "919000000254",
+    "normalized_city": "bengaluru",
+    "skill_category": "automation-heavy",
+    "emails": ["tanvi.gupta31@example.com"],
+    "phones": ["+919000000254", "9000000254"],
+    "skills": ["n8n", "langchain", "rest apis", "mongodb", "sql"]
+  }
 }
 ```
 
-The workflow calls:
+### n8n Automation Workflow (`automations/n8n_duplicate_alert.json`)
+The n8n workflow operates as an automated screening gatekeeper:
+1. **Webhook Trigger (`Incoming CSV Row`):** Listens for incoming POST payloads from web forms or CSV ingestion triggers.
+2. **HTTP Request (`Check App Database`):** Sends payload to `/api/check-duplicate`.
+3. **IF Condition (`Duplicate?`):** Evaluates `{{ $json.duplicate }} == true`.
+4. **Branching Responses:**
+   * `True`: Routes to `Duplicate Alert Response` (returns `alert: "duplicate_found"` and candidate details).
+   * `False`: Routes to `No Duplicate Response` (returns `alert: "no_duplicate"`).
 
-```text
-http://host.docker.internal:8000/api/check-duplicate
+---
+
+## Audio Collection Web App & Metadata Extraction
+
+I built the voice submission portal in `app/` with an interactive recording studio and real-time audio analysis.
+
+### Features:
+* **Live In-Browser Studio:** Uses Web Audio API to capture microphone input, displays a real-time animated waveform visualizer on an HTML5 `<canvas>`, and runs a live timer (`00:00`).
+* **Direct 16-bit PCM WAV Encoding:** The client-side JavaScript packs raw audio buffers directly into valid RIFF WAV files in memory. This allows zero-dependency server-side processing without requiring FFmpeg on client machines.
+* **File Upload Support:** Candidates can record in-browser or upload existing WAV/MP3 files.
+* **Live Telemetry & Submissions Feed:** Real-time table displaying submitter name, phone, inline audio player for instant playback, and extracted technical metadata.
+
+### Pure-Python Audio DSP (`scripts/audio_metadata.py`)
+Using Python's standard `wave` and `math` libraries, the server extracts:
+* **Duration:** $\text{Frames} / \text{Sample Rate}$ (seconds)
+* **Sample Rate:** Converted to kHz (e.g. 16.0 kHz, 44.1 kHz, 48.0 kHz)
+* **Bitrate:** $(\text{Sample Rate} \times \text{Channels} \times \text{Sample Width} \times 8) / 1000$ (kbps)
+* **Loudness (RMS dBFS):**
+  $$\text{RMS} = \sqrt{\frac{1}{N} \sum_{i=1}^{N} x_i^2}$$
+  $$\text{Loudness (dBFS)} = 20 \times \log_{10}\left(\frac{\text{RMS}}{\text{Max Sample Value}}\right)$$
+* **Automated Quality Rating Heuristic:**
+  * `poor - too short`: Duration $< 2.0\text{s}$
+  * `poor - low sample rate`: Sample rate $< 16\text{ kHz}$
+  * `poor - very quiet`: RMS Loudness $< -45\text{ dB}$
+  * `poor - likely clipped`: RMS Loudness $> -3\text{ dB}$
+  * `okay - quiet`: RMS Loudness between $-45\text{ dB}$ and $-35\text{ dB}$
+  * `good`: Passed all quality thresholds
+
+---
+
+## Stuck Log: Technical Challenges & Decisions
+
+### 1. Shifted Row in Gig Workers CSV (`source2_gig_workers.csv` Row 20)
+* **Problem:** Row 20 contained displaced columns where the skill list appeared in `email_id`, the email appeared in `worker_name`, the name in `rate`, the rate in `location`, and so forth.
+* **Initial Reaction:** The safest standard approach would be skipping the row.
+* **My Decision & Solution:** I inspected the data and observed that row 20 was a circular 1-column displacement. I engineered a guarded recovery routine that checks whether `email_id` lacks `@` while `worker_name` contains `@`. It shifts the fields back into alignment, validates that the recovered rate parses correctly, logs an auditable entry in `data_quality_issues` as `repaired_shifted_row`, and imports the person. This preserves 100% of legitimate applicant data while remaining fully deterministic and auditable.
+
+### 2. Geographic Granularity: Delhi vs. New Delhi vs. Delhi NCR
+* **Problem:** Unifying city names required deciding whether to collapse `Delhi`, `New Delhi`, and `Delhi NCR` into a single bucket.
+* **My Decision & Solution:** In recruitment operations, candidates located in the National Capital Region (e.g. Gurgaon, Noida, Faridabad, Ghaziabad) often have different commute and remote-work preferences compared to central Delhi. I mapped `Delhi` and `New Delhi` together as `delhi`, while classifying `Delhi NCR` separately as `ncr`.
+
+### 3. Audio Metadata DSP Without External Binaries
+* **Problem:** Traditional audio metadata extraction relies on FFmpeg or libsox binaries, which can complicate deployment and grading environments.
+* **My Decision & Solution:** I implemented client-side WAV encoding in JavaScript coupled with a pure-Python binary WAV decoder in `scripts/audio_metadata.py`. This calculates frame headers, sample width, channel count, and RMS signal energy mathematically using only Python's built-in `wave` and `math` modules, while retaining an optional `ffprobe` fallback for non-WAV formats.
+
+---
+
+## Scale Plan: 5,000 Workers in One Weekend
+
+If ConsultBae runs a high-volume weekend hiring drive receiving **5,000 worker submissions in 48 hours**, the single-instance SQLite server would face bottlenecks around disk I/O, synchronous upload handling, and unqueued audio DSP.
+
+Here is the architectural upgrade roadmap to handle this scale effortlessly:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                               PRODUCTION SCALE ARCHITECTURE                            │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+ [ 5,000 Workers / Browser Clients ]
+                 │
+                 ├── 1. Request Signed Upload URL ──► [ Fast API / Go Web Tier (Auto-scaled) ]
+                 │                                                │
+                 │                                                ▼ (Generates Presigned URL)
+                 ├── 2. Direct S3 Upload ────────────► [ Amazon S3 / Cloudflare R2 Bucket ]
+                 │                                                │
+                 │                                                ▼ (S3 Event / SQS Message)
+                 └── 3. Submit Metadata ─────────────► [ Asynchronous Task Queue (Celery/Redis) ]
+                                                                  │
+                                      ┌───────────────────────────┴───────────────────────────┐
+                                      ▼                                                       ▼
+                       [ Audio DSP Worker Pool ]                                [ Database Cluster ]
+                       - FFmpeg Transcoding (WAV/MP3)                           - Managed PostgreSQL
+                       - Speech-to-Text & Diarization (Whisper)                 - PgBouncer Pooling
+                       - Quality & SNR Calculations                             - Read Replicas
 ```
 
-If n8n is not running in Docker, I would change that URL to:
+### 1. Storage & Ingestion: Pre-Signed Direct Object Storage
+* **Current:** Audio streams directly to the application server disk.
+* **Scale Change:** Clients request a pre-signed PUT URL from the API and upload audio directly to **Amazon S3** or **Cloudflare R2**. The web server never handles heavy audio binary payloads, reducing server bandwidth and memory usage by 90%.
 
-```text
-http://127.0.0.1:8000/api/check-duplicate
-```
+### 2. Database: PostgreSQL with Connection Pooling
+* **Current:** SQLite database with file locks.
+* **Scale Change:** Migrate to managed **PostgreSQL** with **PgBouncer** connection pooling.
+* **Indexing:** Add B-Tree indexes on `normalized_email`, `normalized_phone`, and composite index on `(normalized_name, normalized_city)` for sub-millisecond duplicate checks across hundreds of thousands of records.
 
-The API returns whether a duplicate was found, the match type, and the matched person details.
+### 3. Asynchronous Audio Processing Queue
+* **Current:** Audio metadata calculated synchronously during HTTP request.
+* **Scale Change:** Offload audio extraction, speech-to-text transcription (OpenAI Whisper), and quality scoring to a background **Celery / Redis / AWS SQS** worker pool. The HTTP API returns `202 Accepted` immediately with a submission ID.
 
-## Audio App
+### 4. Idempotency & Duplicate Prevention
+* **Scale Change:** Introduce `X-Idempotency-Key` headers on client submissions and unique database constraints on `(submitter_phone, audio_hash)` to prevent double submissions from unstable mobile network retries.
 
-The app supports:
+### 5. Observability & Rate Limiting
+* **Rate Limiting:** Implement Redis token-bucket rate limiting (e.g. 20 requests/minute per IP) via Nginx or Cloudflare.
+* **Monitoring:** Add Prometheus metrics and Grafana dashboards tracking upload throughput, queue lag, P95 audio processing latency, and error rates.
 
-- name and phone entry;
-- optional city entry;
-- browser recording;
-- audio file upload;
-- database insert;
-- listing of all submissions;
-- playback from the submissions table.
+---
 
-For WAV files, the app extracts:
+## Video Walkthrough & Demo Checklist
 
-- duration;
-- sample rate in kHz;
-- bitrate in kbps;
-- loudness in dB;
-- simple quality estimate.
+When recording the submission walkthrough video, follow this sequence:
 
-The browser recorder creates WAV files directly, so the demo does not depend on ffmpeg. If I wanted broader upload support for MP3 or WebM in production, I would install ffmpeg and use `ffprobe` for all formats.
+1. **Terminal Ingestion Demo:**
+   * Run `python scripts/ingest.py` $\rightarrow$ Highlight the 105 raw rows processed, 103 usable rows imported, 60 canonical people created, and 3 logged issues.
+   * Run `python scripts/smoke_test.py` $\rightarrow$ Show all automated assertions passing.
+2. **Database & Data Quality Issues:**
+   * Open `database.sqlite` and show `data_quality_issues` (highlighting the repaired shifted row and skipped header).
+   * Show `match_candidates` (highlighting soft matches flagged for review).
+3. **n8n Automation Workflow:**
+   * Open `automations/n8n_duplicate_alert.json` in n8n $\rightarrow$ Explain the webhook trigger, the HTTP check, and the conditional duplicate alert branching.
+4. **Duplicate API Live Call:**
+   * Run `python scripts/test_app_api.py` or trigger a `curl` request showing real-time duplicate detection.
+5. **Audio Web App Live Demonstration:**
+   * Start `python app/main.py` and open `http://127.0.0.1:8000`.
+   * Click **Start Recording**, speak into the microphone to show the live canvas waveform and timer.
+   * Click **Stop Recording**, preview the audio, and hit **Save Submission**.
+   * Show the updated submissions table with instant playback and extracted metrics (duration, sample rate, bitrate, loudness, quality rating).
+6. **Architecture & Scaling Summary:**
+   * Conclude by summarizing the weekend scale-out plan (S3 presigned URLs, Celery queue, and Postgres).
 
-## Data Issues Report
+---
 
-Current ingestion result:
-
-- raw rows read: 105
-- usable imported rows: 103
-- canonical people after email/phone merge: 60
-- logged data-quality issues: 3
-- review match candidates: 7
-
-Issues found and handled:
-
-- Mixed phone formats were normalized into one Indian phone format.
-- Email casing differences were normalized by lowercasing.
-- City casing and aliases were normalized, with `Delhi` and `New Delhi` grouped as `delhi`, and `Delhi NCR` kept separately as `ncr`.
-- Naukri applied dates appeared in multiple formats and were parsed into ISO dates where possible.
-- CTC values used mixed units, so annual rupee values were converted to LPA and small decimals were treated as LPA.
-- Gig rates used hourly and monthly formats, both of which are parsed into amount and unit.
-- Worker status values had case differences and were normalized.
-- CBNexus verified values used `Y`, `yes`, `Yes`, `No`, and `N`, which were normalized to booleans.
-- CBNexus contained a repeated header row inside the file; I skipped and logged it.
-- The gig-worker file contained one shifted row; I repaired it by shifting values back into their expected columns after validating the recovered email and rate.
-- One row had no usable identity and was skipped with a logged issue.
-- Duplicate rows and duplicate people across sources were merged through email and phone keys.
-- Name abbreviations such as `R. Verma` were only merged when a stronger email or phone key matched.
-
-## Stuck Log
-
-1. The hardest data issue was the shifted gig-worker row. At first it looked unsafe because the skill list appeared in the email column and every later value was displaced. I inspected the row manually, found that the values were consistently shifted left, then added a guarded repair that only runs when the recovered email contains `@` and the recovered rate parses correctly. I chose this over skipping the row because the repair was deterministic and auditable.
-
-2. City normalization needed judgment. I initially considered grouping `Delhi`, `New Delhi`, and `Delhi NCR` together, but that would hide a useful operational distinction. I now map `Delhi` and `New Delhi` to `delhi`, while keeping `Delhi NCR` as `ncr`.
-
-3. Audio metadata was unfamiliar territory. My first assumption was that the demo would require ffmpeg everywhere. I avoided making the app fragile by recording WAV directly in the browser and extracting WAV metadata with Python's standard `wave` module. I kept optional `ffprobe` support for non-WAV uploads.
-
-## Scale Plan: 5,000 Workers In One Weekend
-
-The first likely bottlenecks would be uploads, local disk storage, duplicate submissions, synchronous audio processing, and lack of retry visibility.
-
-Before launching at that scale, I would change:
-
-- move audio storage to S3, R2, or GCS;
-- move the database from SQLite to Postgres;
-- process audio metadata asynchronously through a queue;
-- add upload size and duration limits;
-- add duplicate checks before accepting audio;
-- make uploads retry-safe;
-- add monitoring for upload failure rate, queue lag, storage usage, and API errors;
-- add backups and a basic admin review page.
-
-## Video Walkthrough Checklist
-
-In the screen recording I would show:
-
-1. Running `python scripts/ingest.py`.
-2. Running `python scripts/smoke_test.py`.
-3. The merged database result.
-4. The n8n workflow JSON.
-5. A duplicate-check API call.
-6. The audio app recording or uploading a file.
-7. The submission list with playback and extracted metadata.
-8. The matching decisions and data-quality issues.
+*Thank you for reviewing my assignment!*

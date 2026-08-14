@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from audio_metadata import extract_audio_metadata
 from database import DB_PATH, connect
-from normalize import normalize_phone
+from normalize import normalize_city, normalize_phone
 
 
 def make_test_wav(path: Path) -> None:
@@ -32,8 +32,26 @@ def main() -> None:
     conn = connect(DB_PATH)
     people_count = conn.execute("SELECT COUNT(*) AS c FROM people").fetchone()["c"]
     issues_count = conn.execute("SELECT COUNT(*) AS c FROM data_quality_issues").fetchone()["c"]
-    assert people_count >= 50, f"expected merged people, found {people_count}"
-    assert issues_count >= 3, f"expected logged data issues, found {issues_count}"
+    assert people_count == 60, f"expected exactly 60 merged people, found {people_count}"
+    assert issues_count >= 3, f"expected at least 3 logged data issues, found {issues_count}"
+
+    # Check repaired shifted row
+    repaired_issue = conn.execute(
+        "SELECT * FROM data_quality_issues WHERE issue_type = 'repaired_shifted_row'"
+    ).fetchone()
+    assert repaired_issue, "expected repaired_shifted_row to be logged in data_quality_issues"
+
+    # Check city normalization
+    assert normalize_city("Delhi") == "delhi"
+    assert normalize_city("New Delhi") == "delhi"
+    assert normalize_city("Delhi NCR") == "ncr"
+    assert normalize_city("Gurgaon") == "gurugram"
+    assert normalize_city("Bangalore") == "bengaluru"
+
+    delhi_count = conn.execute("SELECT COUNT(*) AS c FROM people WHERE normalized_city = 'delhi'").fetchone()["c"]
+    ncr_count = conn.execute("SELECT COUNT(*) AS c FROM people WHERE normalized_city = 'ncr'").fetchone()["c"]
+    assert delhi_count == 10, f"expected 10 people in delhi, found {delhi_count}"
+    assert ncr_count == 2, f"expected 2 people in ncr, found {ncr_count}"
 
     row = conn.execute(
         """
@@ -53,8 +71,10 @@ def main() -> None:
     assert metadata["duration_seconds"] >= 2
     assert metadata["sample_rate_khz"] == 16
     assert metadata["bitrate_kbps"] == 256
-    print("Smoke test passed")
-    print(f"people={people_count} issues={issues_count} audio={metadata}")
+    assert metadata["quality_estimate"] == "good"
+    print("Smoke test passed successfully!")
+    print(f"people={people_count} issues={issues_count} delhi_count={delhi_count} ncr_count={ncr_count}")
+    print(f"audio_metadata={metadata}")
 
 
 if __name__ == "__main__":
