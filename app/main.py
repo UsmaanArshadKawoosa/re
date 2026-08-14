@@ -223,7 +223,7 @@ def submissions_table() -> str:
             f"<td>{bitrate}</td>"
             f"<td>{loudness}</td>"
             f"<td><span class='{badge_class}'>{html.escape(quality)}</span></td>"
-            f"<td class='text-muted text-sm'>{html.escape(row['created_at'])}</td>"
+            f"<td class='text-muted text-sm'>{html.escape(str(row['created_at']))}</td>"
             "</tr>"
         )
     parts.extend(["</tbody>", "</table>", "</div>"])
