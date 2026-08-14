@@ -8,8 +8,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "app"))
 
 from database import DB_PATH, connect, init_db, USE_POSTGRES
+import os
 import ingest
 import main as app_main
+
+# Diagnostic (do not log secrets): check whether the process sees DATABASE_URL
+print("DATABASE_URL present:", bool(os.environ.get("DATABASE_URL")))
+print("USE_POSTGRES:", USE_POSTGRES)
 
 
 if __name__ == "__main__":
