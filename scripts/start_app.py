@@ -21,6 +21,11 @@ if __name__ == "__main__":
     # PostgreSQL-aware startup: when DATABASE_URL is set, don't look for the
     # local database file. Instead, initialize schema and only run ingestion if
     # the database is empty.
+    print("=== STARTUP DATABASE DIAGNOSTIC ===", flush=True)
+    print("DATABASE_URL present:", bool(os.environ.get("DATABASE_URL")), flush=True)
+    print("USE_POSTGRES:", USE_POSTGRES, flush=True)
+    print("===================================", flush=True)
+
     if USE_POSTGRES:
         print("PostgreSQL configured — initializing schema and checking data...")
         # Use the shared connect/init_db abstraction. connect() ignores the path
