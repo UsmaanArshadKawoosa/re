@@ -313,12 +313,78 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/api/check-duplicate":
-            length = int(self.headers.get("Content-Length", "0"))
-            raw = self.rfile.read(length) if length > 0 else b"{}"
+            # Robust body reading: support Content-Length and chunked transfer-encoding.
+            content_length = self.headers.get("Content-Length")
+            transfer_encoding = self.headers.get("Transfer-Encoding", "")
+            content_type = self.headers.get("Content-Type", "")
+            raw: bytes = b""
+
+            if content_length is not None:
+                try:
+                    length = int(content_length)
+                except Exception:
+                    length = 0
+                if length > 0:
+                    raw = self.rfile.read(length)
+            elif transfer_encoding.lower() == "chunked":
+                # Decode simple chunked transfer encoding
+                try:
+                    while True:
+                        # Read chunk-size line
+                        line = self.rfile.readline()
+                        if not line:
+                            break
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            chunk_size = int(line.split(b";", 1)[0], 16)
+                        except Exception:
+                            break
+                        if chunk_size == 0:
+                            # consume trailer lines until an empty line
+                            while True:
+                                t = self.rfile.readline()
+                                if not t or t in (b"\r\n", b"\n", b""):
+                                    break
+                            break
+                        chunk = self.rfile.read(chunk_size)
+                        raw += chunk
+                        # Consume the following CRLF
+                        self.rfile.read(2)
+                except Exception:
+                    raw = b""
+
+            # Best-effort: try to read any remaining data if nothing found
+            if not raw:
+                try:
+                    remainder = self.rfile.read()
+                    if remainder:
+                        raw = remainder
+                except Exception:
+                    pass
+
+            # Diagnostics (temporary): log metadata and a truncated raw body for debugging
             try:
-                payload = json.loads(raw.decode("utf-8"))
+                decoded = raw.decode("utf-8", errors="replace")
+            except Exception:
+                decoded = "<binary>"
+            print(f"[DEBUG] /api/check-duplicate Content-Length={content_length!r} Transfer-Encoding={transfer_encoding!r} Content-Type={content_type!r}")
+            # Truncate raw body in logs to avoid extremely large payloads
+            print("[DEBUG] /api/check-duplicate raw_body_truncated=\n" + (decoded[:2000] + ("..." if len(decoded) > 2000 else "")))
+
+            try:
+                payload = json.loads(decoded) if decoded else {}
             except Exception:
                 payload = {}
+
+            # Log parsed payload keys for quick inspection
+            try:
+                keys = list(payload.keys()) if isinstance(payload, dict) else None
+            except Exception:
+                keys = None
+            print(f"[DEBUG] /api/check-duplicate parsed_keys={keys}")
+
             body = json.dumps(duplicate_check(payload), indent=2).encode("utf-8")
             self.send_bytes(body, "application/json")
             return
