@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import uuid
+import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -105,10 +106,24 @@ def parse_multipart_form(headers, rfile) -> tuple[dict[str, str], dict[str, dict
 
 
 def duplicate_check(payload: dict) -> dict:
+    """Return a JSON-safe duplicate-check response. Convert only date/time values to ISO strings
+    while preserving numbers, booleans, arrays, and other JSON types.
+    """
     email = payload.get("email", "")
     phone = payload.get("phone", "")
     name = payload.get("name", "")
     city = payload.get("city", "")
+
+    def _convert_datetimes(obj):
+        # Recursively convert datetime/date objects to ISO strings; leave other types intact
+        if isinstance(obj, dict):
+            return {k: _convert_datetimes(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_convert_datetimes(v) for v in obj]
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        return obj
+
     with connect(DB_PATH) as conn:
         init_db(conn)
         person_id = find_existing_person(conn, email=email, phone=phone)
@@ -117,15 +132,18 @@ def duplicate_check(payload: dict) -> dict:
             emails = [r["email"] for r in conn.execute("SELECT email FROM person_emails WHERE person_id = ?", (person_id,)).fetchall()]
             phones = [r["phone"] for r in conn.execute("SELECT phone FROM person_phones WHERE person_id = ?", (person_id,)).fetchall()]
             skills = [r["skill"] for r in conn.execute("SELECT skill FROM person_skills WHERE person_id = ?", (person_id,)).fetchall()]
+
+            person_obj = {
+                **dict(row),
+                "emails": emails,
+                "phones": phones,
+                "skills": skills,
+            }
+
             return {
                 "duplicate": True,
                 "match_type": "email_or_phone",
-                "person": {
-                    **dict(row),
-                    "emails": emails,
-                    "phones": phones,
-                    "skills": skills,
-                },
+                "person": _convert_datetimes(person_obj),
                 "normalized": {
                     "email": normalize_email(email),
                     "phone": normalize_phone(phone),
@@ -150,10 +168,11 @@ def duplicate_check(payload: dict) -> dict:
                     (normalized_name, normalized_city),
                 )
             ]
+
         return {
             "duplicate": bool(candidates),
             "match_type": "name_city_candidate" if candidates else "none",
-            "candidates": candidates,
+            "candidates": _convert_datetimes(candidates),
             "normalized": {
                 "email": normalize_email(email),
                 "phone": normalize_phone(phone),
